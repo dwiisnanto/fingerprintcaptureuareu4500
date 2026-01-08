@@ -589,6 +589,8 @@ function mergeFingerprints() {
     canvas.height = headerHeight + rows * (imgHeight + labelHeight);
 
     let ctx = canvas.getContext("2d");
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Set font dan style untuk teks profil
     ctx.font = "bold 18px Arial";
@@ -612,6 +614,7 @@ function mergeFingerprints() {
         // ctx.fillStyle = "black"; // ganti warna label ke hitam supaya terbaca
         ctx.font = "14px Arial";
         ctx.textAlign = "center";
+        ctx.fillStyle = "white";
 
         // Draw label finger
         ctx.fillText(
@@ -622,7 +625,7 @@ function mergeFingerprints() {
     });
 
 
-    mergedImageBase64 = canvas.toDataURL("image/png");
+    mergedImageBase64 = canvas.toDataURL("image/jpeg", 0.95);
 
     // Preview hasil akhir
     let vDiv = document.getElementById("imagediv");
@@ -632,7 +635,17 @@ function mergeFingerprints() {
     finalImg.style.width = "100%";
     vDiv.appendChild(finalImg);
 
-    alert("Sidik Jari berhasil dibuat");
+    // AUTO DOWNLOAD
+    let safeName = userProfile.nama.replace(/\s+/g, "_");
+    let safeDob = userProfile.tglLahir.replace(/-/g, "");
+    let safeBlood = userProfile.golDarah.toUpperCase();
+
+    let fileName = `${safeName}_${safeDob}_${safeBlood}_FINGERPRINT.png`;
+    const fileNames = `${fileName}.jpg`;
+    autoDownloadImage(mergedImageBase64, fileNames);
+
+    alert("Sidik Jari berhasil dibuat & diunduh");
+
 }
 
 function updateFingerIndicator() {
@@ -674,5 +687,14 @@ function inputUserProfile() {
 
     return true;
 }
+function autoDownloadImage(base64Data, fileName) {
+    const link = document.createElement("a");
+    link.href = base64Data;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
 
 // For Download and formats ends
