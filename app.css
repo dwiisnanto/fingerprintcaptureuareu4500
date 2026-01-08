@@ -1,0 +1,114 @@
+﻿body {
+    font-family: 'Segoe UI', sans-serif;
+}
+
+span {
+    font-style: italic;
+}
+
+.container-fluid {
+  background-color:#20a9d7;
+ }
+
+#Container {
+	margin: 20px auto;
+	max-width: 900px;
+	min-height: 600px;
+	width: 100%;
+}
+
+#imagediv {
+	padding:0;
+	margin: 0 auto;
+	max-width: 100%;
+	height: auto;
+	min-height: 300px;
+	border: 1px solid rgba(51, 122, 183, 0.39);
+	display: table;
+}
+#imagediv img {
+	width: 80%;
+	height: auto;
+}
+
+#imagediv div{
+	text-align: center;
+	vertical-align: middle;
+	height: 500px;
+	background: #d3d3d3;
+	display: table-cell;
+}
+
+
+#image {
+	width: 100%;
+}
+
+#imageGallery {
+	padding:0px;
+	margin: 0 auto;
+	width: 100%;
+	height: 100px;
+	overflow: hidden;
+}
+
+#imageGallery img{
+	float: left;
+	width:20%;
+	height: 100%
+}
+
+#deviceInfo {
+	padding:5px;
+	margin: 0 auto;
+	width: 100%;
+	height: 100px;
+	text-align: center;
+}
+
+#dynamicInfoDivs{
+	position: relative;
+	left: 30%;
+}
+
+#Scores {
+	margin: 0 auto;
+	width: 500px;
+    text-align:center;
+    border: 2px solid black; 
+}
+
+#status {
+    min-height: 22px;
+	text-align: center;
+	margin-bottom: 5px;
+	color: red;
+}
+
+#contentButtons{
+	padding: 5px;
+  	text-align: center;
+  	margin-bottom: 5px;
+}
+
+#readerDivButtons {
+	padding: 5px;
+  	text-align: center;
+  	margin-bottom: 5px;
+}
+
+#modalContent{
+	width: 350px;
+	margin: 0 auto;
+	padding : 5px;
+	text-align: left;
+	vertical-align: center;
+}
+
+#saveAndFormats {
+  position: static; /* atau dihapus saja */
+  width: 100%; /* atau sesuai kebutuhan */
+  margin-top: 10px; /* beri jarak ke atas */
+  /* Hilangkan left dan top */
+}
+

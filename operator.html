@@ -1,0 +1,277 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Fingerprint Capture App – Operator Mode</title>
+  <link rel="stylesheet" href="css/bootstrap-min.css">
+  <style>
+    body { background: #eef1f5; }
+    .step-card { box-shadow: 0 6px 15px rgba(0,0,0,.12); }
+    .preview-box { min-height: 320px; border: 2px dashed #bbb; background: #fff; display: flex; align-items: center; justify-content: center; }
+    #status { font-weight: bold; }
+    .progress { height: 30px; }
+  </style>
+</head>
+<body>
+<div id="Container">
+  <nav class="navbar navbar-dark bg-primary">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h4">🖐 Fingerprint Capture – Operator Mode</span>
+    </div>
+  </nav>
+  <div class="container mt-3">
+
+    <!-- STEP 1: Pilih Reader -->
+    <div class="card step-card">
+      <div class="card-header bg-dark text-white">STEP 1 — Pilih Fingerprint Reader</div>
+      <div class="card-body">
+        <select class="form-control mb-2" id="step1-readersDropDown" onchange="selectChangeEvent()"></select>
+        <div class="d-flex gap-2">
+          <button class="btn btn-secondary" onclick="readersDropDownPopulate(false)">🔄 Refresh</button>
+          <button class="btn btn-info" data-toggle="modal" data-target="#myModal" onclick="populatePopUpModal()">ℹ Info Reader</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: Data User -->
+    <div class="card step-card mt-3">
+      <div class="card-header bg-dark text-white">STEP 2 — Data Pemilik Sidik Jari</div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-4"><label>Nama Lengkap</label><input class="form-control" id="namaUser"></div>
+          <div class="col-md-4"><label>Tanggal Lahir</label><input type="date" class="form-control" id="tglLahir"></div>
+          <div class="col-md-4"><label>Gol. Darah</label>
+            <select class="form-control" id="golDarah">
+              <option>A</option><option>B</option><option>AB</option><option>O</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3: Scan -->
+    <div class="card step-card mt-3">
+      <div class="card-header bg-success text-white">STEP 3 — Scan 10 Jari (Ikuti Instruksi)</div>
+      <div class="card-body">
+
+        <div id="status" class="alert alert-info text-center h5">Tekan START untuk mulai scan</div>
+
+        <div class="row">
+          <!-- Preview -->
+          <div class="col-md-8 text-center"><div id="imagediv" class="preview-box"></div></div>
+
+          <!-- Action -->
+          <div class="col-md-4">
+            <button class="btn btn-success btn-lg btn-block mb-2" onclick="onStart()">▶ START SCAN</button>
+            <button class="btn btn-danger btn-block mb-2" onclick="onStop()">■ STOP</button>
+            <button class="btn btn-warning btn-block" onclick="onClear()">↺ RESET</button>
+            <hr>
+            <div class="progress"><div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">0 / 10</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4: Export -->
+    <div class="card step-card mt-3 mb-4">
+      <div class="card-header bg-primary text-white">STEP 4 — Export Data</div>
+      <div class="card-body text-center">
+        <button class="btn btn-primary btn-lg" id="saveImagePng" onclick="onImageDownload()" disabled>⬇ EXPORT 10-PRINT</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="lib/jquery.min.js"></script>
+<script src="lib/bootstrap.min.js"></script>
+<script src="scripts/es6-shim.js"></script>
+<script src="scripts/websdk.client.bundle.min.js"></script>
+<script src="scripts/fingerprint.sdk.min.js"></script>
+
+<script>
+let capturedImages = [];
+const maxFingers = 10;
+let mergedImageBase64 = null;
+let retryCount = 0;
+const maxRetryPerFinger = 3;
+
+const fingerLabels = [
+  "Kanan - Jempol","Kanan - Telunjuk","Kanan - Tengah","Kanan - Manis","Kanan - Kelingking",
+  "Kiri - Jempol","Kiri - Telunjuk","Kiri - Tengah","Kiri - Manis","Kiri - Kelingking"
+];
+
+let userProfile = { nama: "", tglLahir: "", golDarah: "" };
+let myVal = ""; 
+let currentFormat = Fingerprint.SampleFormat.PngImage;
+
+var test = null;
+
+class FingerprintSdkTest {
+  constructor() {
+    this.acquisitionStarted = false;
+    this.sdk = new Fingerprint.WebApi();
+
+    this.sdk.onDeviceConnected = () => showMessage("Scan your finger");
+    this.sdk.onDeviceDisconnected = () => showMessage("Device disconnected");
+    this.sdk.onCommunicationFailed = () => showMessage("Communication failed");
+
+    this.sdk.onSamplesAcquired = sampleAcquired;
+
+    this.sdk.onQualityReported = (e) => {
+      let q = document.getElementById("qualityInputBox");
+      if(q) q.value = Fingerprint.QualityCode[e.quality];
+
+      if(e.quality < 2) {
+        if(retryCount < maxRetryPerFinger) {
+          showMessage(`Quality rendah, ulangi scan jari: ${fingerLabels[capturedImages.length]} (Retry ${retryCount+1})`);
+          retryCount++;
+          this.stopCapture().then(() => setTimeout(() => this.startCapture(), 800));
+        } else {
+          showMessage(`Gagal scan jari ${fingerLabels[capturedImages.length]} setelah ${maxRetryPerFinger} percobaan`);
+          retryCount = 0;
+        }
+      } else {
+        retryCount = 0;
+      }
+    }
+  }
+
+  startCapture() {
+    if(this.acquisitionStarted) return;
+    showMessage("Menunggu sidik jari...");
+    this.sdk.startAcquisition(currentFormat, myVal).then(() => this.acquisitionStarted = true, err => showMessage(err.message));
+  }
+
+  stopCapture() {
+    if(!this.acquisitionStarted) return Promise.resolve();
+    return this.sdk.stopAcquisition().then(() => this.acquisitionStarted = false, err => showMessage(err.message));
+  }
+
+  getInfo() { return this.sdk.enumerateDevices(); }
+  getDeviceInfoWithID(uid) { return this.sdk.getDeviceInfo(uid); }
+}
+
+window.onload = function() {
+  localStorage.clear();
+  test = new FingerprintSdkTest();
+  readersDropDownPopulate(true);
+  disableEnable();
+  disableEnableExport(true);
+};
+
+function showMessage(msg){ document.getElementById("status").innerHTML = msg; }
+
+function onStart() {
+  if(!myVal) { alert("Pilih fingerprint reader terlebih dahulu"); return; }
+  if(!inputUserProfile()) return;
+  if(capturedImages.length >= maxFingers){ alert("10 jari sudah lengkap"); return; }
+  assignFormat();
+  test.startCapture();
+  showMessage(`Silakan scan: <b>${fingerLabels[capturedImages.length]}</b>`);
+}
+
+function onStop(){ test.stopCapture(); }
+
+function onClear() {
+  capturedImages = [];
+  mergedImageBase64 = null;
+  retryCount = 0;
+  document.getElementById("imagediv").innerHTML = "";
+  showMessage("Tekan START untuk mulai scan");
+  $("#progressBar").css("width","0%").text("0 / 10");
+  disableEnableExport(true);
+}
+
+function selectChangeEvent() {
+  var dd = document.getElementById("step1-readersDropDown");
+  myVal = dd.value;
+  disableEnable();
+  document.getElementById('imageGallery')?.innerHTML = "";
+  if(myVal && inputUserProfile()){ onStart(); }
+}
+
+function readersDropDownPopulate(checkRedirect){
+  test.getInfo().then(devices => {
+    let dd = document.getElementById("step1-readersDropDown");
+    dd.innerHTML = "<option value=''>Select Reader</option>";
+    devices.forEach(d => dd.add(new Option(d,d)));
+    if(devices.length==1) dd.selectedIndex = 1;
+  }, err => showMessage(err.message));
+}
+
+function inputUserProfile() {
+  userProfile.nama = document.getElementById("namaUser").value.trim();
+  userProfile.tglLahir = document.getElementById("tglLahir").value;
+  userProfile.golDarah = document.getElementById("golDarah").value;
+  if(!userProfile.nama || !userProfile.tglLahir || !userProfile.golDarah){
+    alert("Lengkapi data pemilik sidik jari terlebih dahulu"); return false;
+  }
+  return true;
+}
+
+function sampleAcquired(s) {
+  if(capturedImages.length>=maxFingers) return;
+  const samples = JSON.parse(s.samples);
+  const imgSrc = "data:image/png;base64," + Fingerprint.b64UrlTo64(samples[0]);
+  const img = new Image(); img.src = imgSrc;
+  img.onload = function(){
+    capturedImages.push(img);
+    document.getElementById('imagediv').innerHTML=""; document.getElementById('imagediv').appendChild(img.cloneNode());
+    updateFingerIndicator();
+    showMessage(`Fingerprint tersimpan: ${capturedImages.length}/${maxFingers}<br>Scan: <b>${fingerLabels[capturedImages.length]||"Selesai"}</b>`);
+    if(capturedImages.length===maxFingers){ test.stopCapture(); mergeFingerprints(); disableEnableExport(false); }
+  }
+}
+
+function updateFingerIndicator() {
+  let html = "<b>Progress 10-Print:</b><br>";
+  fingerLabels.forEach((label,i)=>{
+    if(i<capturedImages.length) html += "✅ "+(i+1)+". "+label+"<br>";
+    else if(i===capturedImages.length) html += "👉 "+(i+1)+". "+label+" (Scan sekarang)<br>";
+    else html += "⬜ "+(i+1)+". "+label+"<br>";
+  });
+  document.getElementById("status").innerHTML = html;
+  let progress = Math.round((capturedImages.length/maxFingers)*100);
+  $("#progressBar").css("width",progress+"%").text(capturedImages.length+" / "+maxFingers);
+}
+
+function assignFormat(){ currentFormat = Fingerprint.SampleFormat.PngImage; }
+
+function disableEnable(){
+  document.querySelector("button[onclick='onStart()']").disabled = !myVal || !inputUserProfile();
+  document.querySelector("button[onclick='onStop()']").disabled = !myVal;
+}
+
+function disableEnableExport(val){ $('#saveImagePng').prop('disabled', val); }
+
+function mergeFingerprints(){
+  const headerHeight=60, cols=5, rows=2, imgWidth=capturedImages[0].width, imgHeight=capturedImages[0].height, labelHeight=30;
+  let canvas=document.createElement("canvas");
+  canvas.width=cols*imgWidth; canvas.height=headerHeight+rows*(imgHeight+labelHeight);
+  let ctx = canvas.getContext("2d");
+  ctx.font="14px Arial"; ctx.fillStyle="#000";
+  capturedImages.forEach((img,index)=>{
+    let col=index%cols, row=index<5?0:1;
+    let x=col*imgWidth, y=headerHeight+row*(imgHeight+labelHeight);
+    ctx.font="16px Arial"; ctx.textAlign="left";
+    ctx.fillText("Nama : "+userProfile.nama,10,20);
+    ctx.fillText("Tgl Lahir : "+userProfile.tglLahir,10,40);
+    ctx.fillText("Gol. Darah : "+userProfile.golDarah,10,60);
+    ctx.drawImage(img,x,y,imgWidth,imgHeight);
+    ctx.fillText(fingerLabels[index], x+imgWidth/2, y+imgHeight+20);
+  });
+  mergedImageBase64 = canvas.toDataURL("image/png");
+  let vDiv = document.getElementById("imagediv"); vDiv.innerHTML="";
+  let finalImg=document.createElement("img"); finalImg.src=mergedImageBase64; finalImg.style.width="100%"; vDiv.appendChild(finalImg);
+  alert("10-print FBI berhasil dibuat");
+}
+
+function onImageDownload(){
+  if(!mergedImageBase64){ alert("Belum ada 10 fingerprint untuk diexport"); return; }
+  let safeName=userProfile.nama.replace(/\s+/g,"_"), safeDob=userProfile.tglLahir.replace(/-/g,""), safeBlood=userProfile.golDarah.toUpperCase();
+  let fileName = `${safeName}_${safeDob}_${safeBlood}_FINGERPRINT.png`;
+  var a=document.createElement("a"); a.href=mergedImageBase64; a.download=fileName; a.click();
+}
+</script>
+</body>
+</html>
