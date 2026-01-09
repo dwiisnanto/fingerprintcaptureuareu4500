@@ -640,7 +640,7 @@ function mergeFingerprints() {
     let safeDob = userProfile.tglLahir.replace(/-/g, "");
     let safeBlood = userProfile.golDarah.toUpperCase();
 
-    let fileName = `${safeName}_${safeDob}_${safeBlood}_FINGERPRINT.png`;
+    let fileName = `${safeName}_${safeDob}_${safeBlood}_FINGERPRINT`;
     const fileNames = `${fileName}.jpg`;
     autoDownloadImage(mergedImageBase64, fileNames);
 
